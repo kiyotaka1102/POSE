@@ -1,4 +1,3 @@
-import React from 'react';
 import { Camera, Users, Package, BarChart3 } from 'lucide-react';
 
 interface DashboardHomeProps {

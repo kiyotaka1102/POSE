@@ -1,4 +1,3 @@
-import React from 'react';
 import { Home, Camera, Users, Package, BarChart3, Settings, MessageSquare } from 'lucide-react';
 import {type LucideIcon} from 'lucide-react';
 
@@ -35,12 +34,12 @@ export default function Sidebar({ sidebarOpen, activeMenu, setActiveMenu }: Side
         <div className={`p-6 border-white/15 border-b ${sidebarOpen ? '' : 'hidden'}`}>
         {sidebarOpen ? (
             <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 bg-[#1a1a1a] rounded-lg flex items-center justify-center shrink-0 backdrop-blur-sm">
-                <span className="text-gray-400 font-bold text-sm">WV</span>
+            <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 backdrop-blur-sm">
+                <span className="text-gray-600 font-bold text-xl">WV</span>
             </div>
             <div className="min-w-0 flex-1">
-                <h3 className="text-sm font-bold text-gray-400 truncate">WareVision</h3>
-                <p className="text-xs text-gray-400 truncate">Smart Monitoring</p>
+                <h3 className="text-sm font-bold text-gray-600 truncate">WareVision</h3>
+                <p className="text-xs text-gray-600 truncate">Smart Monitoring</p>
             </div>
             </div>
         ) : (

@@ -1,4 +1,3 @@
-import React from 'react';
 import { Menu, X, Bell, Search } from 'lucide-react';
 
 interface TopbarProps {
