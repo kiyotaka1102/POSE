@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { trackingWebSocketService, type FrameTrackData, type BBox } from '../services/trackingWebSocketService';
 
 interface TrackingVisualizerProps {
@@ -14,7 +14,26 @@ export default function TrackingVisualizer({ videoUrl, cameraId }: TrackingVisua
   const [isPlaying, setIsPlaying] = useState(false);
   const [totalFrames, setTotalFrames] = useState(0);
   const [ws, setWs] = useState<WebSocket | null>(null);
-  // const animationRef = useRef<number | null>(null);
+
+  // Thêm state cho popup
+  const [selectedBBox, setSelectedBBox] = useState<BBox | null>(null);
+  const [popupPosition, setPopupPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [clickedPoint, setClickedPoint] = useState<{ x: number; y: number } | null>(null);
+
+  // Ref để detect click outside
+  const popupRef = useRef<HTMLDivElement>(null);
+
+  // Đóng popup khi click ra ngoài
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (popupRef.current && !popupRef.current.contains(e.target as Node)) {
+        setSelectedBBox(null);
+        setClickedPoint(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Connect to WebSocket and setup video
   useEffect(() => {
@@ -124,36 +143,89 @@ export default function TrackingVisualizer({ videoUrl, cameraId }: TrackingVisua
     // Draw bounding boxes
     if (trackData.bboxes && trackData.bboxes.length > 0) {
       trackData.bboxes.forEach((bbox: BBox) => {
-        drawBBox(ctx, bbox);
+        drawBBox(ctx, bbox, selectedBBox?.object_id === bbox.object_id);
       });
     }
-  }, [trackData]);
+  }, [trackData, selectedBBox]);
+
+  // Xử lý click lên canvas
+  const handleCanvasClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!canvasRef.current || !trackData?.bboxes) return;
+
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    // Scale về kích thước video thật (vì canvas có thể bị scale bởi CSS)
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const videoX = x * scaleX;
+    const videoY = y * scaleY;
+
+    let clickedBBox: BBox | null = null;
+    let minDistance = Infinity;
+
+    // Tìm bbox gần điểm click nhất (trong bán kính ~80px)
+    for (const bbox of trackData.bboxes) {
+      if (!bbox.corners_2d || bbox.corners_2d.length === 0) continue;
+
+      const centerX = bbox.corners_2d.reduce((s, p) => s + p[0], 0) / 8;
+      const centerY = bbox.corners_2d.reduce((s, p) => s + p[1], 0) / 8;
+
+      const dist = Math.hypot(centerX - videoX, centerY - videoY);
+      if (dist < 80 && dist < minDistance) { // 80px tolerance
+        minDistance = dist;
+        clickedBBox = bbox;
+      }
+    }
+
+    if (clickedBBox) {
+      // Nếu click lại chính object đang chọn → tắt
+      if (selectedBBox?.object_id === clickedBBox.object_id) {
+        setSelectedBBox(null);
+        setClickedPoint(null);
+      } else {
+        setSelectedBBox(clickedBBox);
+        setClickedPoint({ x: e.clientX, y: e.clientY });
+        setPopupPosition({ x: e.clientX, y: e.clientY + 10 }); // mũi tên xuống dưới
+      }
+    } else {
+      setSelectedBBox(null);
+      setClickedPoint(null);
+    }
+  }, [trackData, selectedBBox]);
 
   const drawBBox = (
     ctx: CanvasRenderingContext2D,
-    bbox: BBox
+    bbox: BBox,
+    isSelected: boolean = false
   ) => {
-    // Use projected 2D corner points if available
     if (!bbox.corners_2d || bbox.corners_2d.length === 0) {
       return;
     }
 
     const corners2D = bbox.corners_2d;
 
-    // Color based on class
+    // Color mapping
     const colors: Record<number, string> = {
-      1: '#FF6B6B', // Red - Person
-      2: '#4ECDC4', // Teal - Vehicle
-      3: '#45B7D1', // Blue - Pallet
-      5: '#FFA07A', // Salmon - Robot
+      0: '#FF6B6B', // Person
+      1: '#4ECDC4', // Forklift
+      2: '#45B7D1', // NovaCarter
+      3: '#F0E68C', // Transporter
+      4: '#C71585', // NovaCarter
+      5: '#FFD700', // AgilityDigit
     };
     const color = colors[bbox.class_id] || '#FFFFFF';
 
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 2;
+    // Highlight khi chọn
+    ctx.strokeStyle = isSelected ? '#FFFF00' : color;
+    ctx.lineWidth = isSelected ? 4 : 2;
+    ctx.shadowBlur = isSelected ? 10 : 0;
+    ctx.shadowColor = isSelected ? '#FFFF00' : 'transparent';
 
-    // Draw the 12 edges of the 3D box
-    // Bottom face (indices 0,1,2,3)
+    // ── Draw 3D box edges ──
+    // Bottom face (0,1,2,3)
     ctx.beginPath();
     ctx.moveTo(corners2D[0][0], corners2D[0][1]);
     ctx.lineTo(corners2D[1][0], corners2D[1][1]);
@@ -162,7 +234,7 @@ export default function TrackingVisualizer({ videoUrl, cameraId }: TrackingVisua
     ctx.lineTo(corners2D[0][0], corners2D[0][1]);
     ctx.stroke();
 
-    // Top face (indices 4,5,6,7)
+    // Top face (4,5,6,7)
     ctx.beginPath();
     ctx.moveTo(corners2D[4][0], corners2D[4][1]);
     ctx.lineTo(corners2D[5][0], corners2D[5][1]);
@@ -179,57 +251,101 @@ export default function TrackingVisualizer({ videoUrl, cameraId }: TrackingVisua
     }
     ctx.stroke();
 
-    // Calculate center in 2D for labeling
-    const centerX = corners2D.reduce((sum, p) => sum + p[0], 0) / 8;
-    const centerY = corners2D.reduce((sum, p) => sum + p[1], 0) / 8;
+    // ── 2D center (dùng để đặt label) ──
+    const centerX = corners2D.reduce((s, p) => s + p[0], 0) / 8;
+    const centerY = corners2D.reduce((s, p) => s + p[1], 0) / 8;
 
-    // Draw direction arrow (pointing forward along yaw)
-    const arrowLength = 30;
-    const arrowEndX = centerX + arrowLength * Math.cos(bbox.yaw);
-    const arrowEndY = centerY + arrowLength * Math.sin(bbox.yaw);
+    // ── Draw yaw arrow (ưu tiên dữ liệu đã chiếu từ backend) ──
+    if (bbox.yaw_arrow?.start_2d && bbox.yaw_arrow?.end_2d) {
+      const [sx, sy] = bbox.yaw_arrow.start_2d;
+      const [ex, ey] = bbox.yaw_arrow.end_2d;
 
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(centerX, centerY);
-    ctx.lineTo(arrowEndX, arrowEndY);
-    ctx.stroke();
+      // Kiểm tra tính hợp lệ
+      if (
+        Number.isFinite(sx) && Number.isFinite(sy) &&
+        Number.isFinite(ex) && Number.isFinite(ey)
+      ) {
+        const dx = ex - sx;
+        const dy = ey - sy;
+        const length = Math.sqrt(dx * dx + dy * dy);
+        const angle = Math.atan2(dy, dx);
 
-    // Draw arrowhead
-    const angle = bbox.yaw;
-    const arrowSize = 8;
-    ctx.beginPath();
-    ctx.moveTo(arrowEndX, arrowEndY);
-    ctx.lineTo(arrowEndX - arrowSize * Math.cos(angle - Math.PI / 6), arrowEndY - arrowSize * Math.sin(angle - Math.PI / 6));
-    ctx.moveTo(arrowEndX, arrowEndY);
-    ctx.lineTo(arrowEndX - arrowSize * Math.cos(angle + Math.PI / 6), arrowEndY - arrowSize * Math.sin(angle + Math.PI / 6));
-    ctx.stroke();
+        // Rút ngắn arrow về ~60-70% độ dài gốc (hoặc giới hạn tối đa)
+        const maxArrowLength = 60; // pixel - điều chỉnh theo ý thích
+        const desiredLength = Math.min(length * 0.7, maxArrowLength);
+        const scale = desiredLength / length;
 
-    // Draw label background
-    const label = `ID: ${bbox.object_id} (Class: ${bbox.class_id})`;
-    ctx.font = 'bold 14px Arial';
-    ctx.fillStyle = color;
-    const textMetrics = ctx.measureText(label);
-    const textHeight = 20;
+        const newEx = sx + dx * scale;
+        const newEy = sy + dy * scale;
 
-    const labelX = centerX;
-    const labelY = centerY - 40;
+        const arrowSize = 6; // kích thước đầu mũi tên
 
-    ctx.fillRect(labelX - textMetrics.width / 2 - 4, labelY - textHeight - 4, textMetrics.width + 8, textHeight);
+        // Arrow line
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 3;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(newEx, newEy);
+        ctx.stroke();
 
-    // Draw label text
-    ctx.fillStyle = '#FFFFFF';
-    ctx.textAlign = 'center';
-    ctx.fillText(label, labelX, labelY - 8);
-    ctx.textAlign = 'left';
+        // Arrowhead
+        ctx.beginPath();
+        ctx.moveTo(newEx, newEy);
+        ctx.lineTo(
+          newEx - arrowSize * Math.cos(angle - Math.PI / 6),
+          newEy - arrowSize * Math.sin(angle - Math.PI / 6)
+        );
+        ctx.moveTo(newEx, newEy);
+        ctx.lineTo(
+          newEx - arrowSize * Math.cos(angle + Math.PI / 6),
+          newEy - arrowSize * Math.sin(angle + Math.PI / 6)
+        );
+        ctx.stroke();
+      }
+    } else {
+      // ── Fallback: vẽ arrow từ center (cũng rút ngắn) ──
+      const baseArrowLength = 40; // giảm từ 10 → 40 pixels là hợp lý trên khung hình
+      const maxArrowLength = 50;
+      const arrowLength = Math.min(baseArrowLength, maxArrowLength);
 
-    // Draw 3D info
+      const arrowEndX = centerX + arrowLength * Math.cos(bbox.yaw);
+      const arrowEndY = centerY + arrowLength * Math.sin(bbox.yaw);
+      const angle = bbox.yaw;
+      const arrowSize = 8;
+
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(centerX, centerY);
+      ctx.lineTo(arrowEndX, arrowEndY);
+      ctx.stroke();
+
+      // Arrowhead
+      ctx.beginPath();
+      ctx.moveTo(arrowEndX, arrowEndY);
+      ctx.lineTo(
+        arrowEndX - arrowSize * Math.cos(angle - Math.PI / 6),
+        arrowEndY - arrowSize * Math.sin(angle - Math.PI / 6)
+      );
+      ctx.moveTo(arrowEndX, arrowEndY);
+      ctx.lineTo(
+        arrowEndX - arrowSize * Math.cos(angle + Math.PI / 6),
+        arrowEndY - arrowSize * Math.sin(angle + Math.PI / 6)
+      );
+      ctx.stroke();
+    }
+
+    // 3D coordinates + yaw
     ctx.font = '12px Arial';
     ctx.fillStyle = color;
-    ctx.textAlign = 'center';
-    const info = `(${bbox.center_3d[0].toFixed(1)}, ${bbox.center_3d[1].toFixed(1)}, ${bbox.center_3d[2].toFixed(1)}) Yaw: ${(bbox.yaw * 180 / Math.PI).toFixed(1)}°`;
-    ctx.fillText(info, labelX, labelY + 10);
+
+    // Reset
     ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    ctx.shadowBlur = 0;
+    ctx.shadowColor = 'transparent';
   };
 
   const handlePlayPause = () => {
@@ -260,8 +376,21 @@ export default function TrackingVisualizer({ videoUrl, cameraId }: TrackingVisua
     }
   };
 
+  // Map class_id to name for display
+  const getClassName = (classId: number) => {
+    const classMap: Record<number, string> = {
+      0: 'Person',
+      1: 'Forklift',
+      2: 'NovaCarter',
+      3: 'Transporter',
+      4: 'FourierGR1T2',
+      5: 'AgilityDigit',
+    };
+    return classMap[classId] || 'Unknown';
+  };
+
   return (
-    <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+    <div className="bg-white rounded-lg shadow-lg overflow-hidden relative"> {/* Thêm relative cho popup absolute */}
       <div className="aspect-video bg-black relative">
         {/* Hidden video element */}
         <video
@@ -274,7 +403,8 @@ export default function TrackingVisualizer({ videoUrl, cameraId }: TrackingVisua
         {/* Canvas for drawing */}
         <canvas
           ref={canvasRef}
-          className="w-full h-full object-contain bg-black"
+          className="w-full h-full object-contain bg-black cursor-pointer" // Thêm cursor pointer
+          onClick={handleCanvasClick}
         />
 
         {/* Loading indicator */}
@@ -287,6 +417,39 @@ export default function TrackingVisualizer({ videoUrl, cameraId }: TrackingVisua
           </div>
         )}
       </div>
+
+      {/* Popup chi tiết bbox */}
+      {selectedBBox && (
+        <div
+          ref={popupRef}
+          className="absolute bg-white rounded-lg shadow-xl p-4 z-50 max-w-xs"
+          style={{
+            top: `${popupPosition.y}px`,
+            left: `${popupPosition.x}px`,
+            transform: 'translate(-50%, 0)', // Căn giữa ngang
+          }}
+        >
+          {/* Mũi tên chỉ lên trên (triangle) */}
+          <div
+            className="absolute w-0 h-0 border-l-8 border-r-8 border-b-8 border-transparent border-b-white"
+            style={{
+              top: '-8px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+            }}
+          />
+          <h3 className="font-bold text-lg mb-2 text-gray-700">Object Details</h3>
+          <div className="space-y-1 text-sm text-gray-700">
+            <p><span className="font-semibold">ID:</span> {selectedBBox.object_id}</p>
+            <p><span className="font-semibold">Class:</span> {getClassName(selectedBBox.class_id)} ({selectedBBox.class_id})</p>
+            {selectedBBox.center_3d && (
+              <p><span className="font-semibold">3D Position:</span> ({selectedBBox.center_3d[0].toFixed(2)}, {selectedBBox.center_3d[1].toFixed(2)}, {selectedBBox.center_3d[2].toFixed(2)})</p>
+            )}
+            <p><span className="font-semibold">Yaw:</span> {(selectedBBox.yaw * 180 / Math.PI).toFixed(0)}°</p>
+            {/* Thêm các info khác nếu có, ví dụ dimensions nếu BBox có field size_3d */}
+          </div>
+        </div>
+      )}
 
       {/* Controls */}
       <div className="p-4 bg-gray-100 space-y-4">
@@ -336,7 +499,7 @@ export default function TrackingVisualizer({ videoUrl, cameraId }: TrackingVisua
 
         {/* Tracking info */}
         {trackData && trackData.bboxes.length > 0 && (
-          <div className="bg-white rounded p-3 text-sm">
+          <div className="bg-white rounded p-3 text-sm text-gray-700">
             <div className="font-bold mb-2">
               Detected Objects: {trackData.bboxes.length}
             </div>
@@ -354,29 +517,6 @@ export default function TrackingVisualizer({ videoUrl, cameraId }: TrackingVisua
             </div>
           </div>
         )}
-
-        {/* Legend */}
-        <div className="bg-white rounded p-3 text-sm">
-          <div className="font-bold mb-2">Class Legend:</div>
-          <div className="grid grid-cols-2 gap-2">
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-red-500 border border-black"></div>
-              <span>Person (1)</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-teal-500 border border-black"></div>
-              <span>Vehicle (2)</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-blue-400 border border-black"></div>
-              <span>Pallet (3)</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-orange-300 border border-black"></div>
-              <span>Robot (5)</span>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );

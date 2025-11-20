@@ -7,14 +7,18 @@ export interface FrameTrackData {
   bboxes: BBox[];
 }
 
-export interface BBox {
+export type BBox = {
   object_id: number;
   class_id: number;
-  corners_2d: [number, number][];  // 8 corner points in 2D: [[x1,y1], [x2,y2], ...]
-  center_3d: number[];
-  dimension: number[];
+  corners_2d: [number, number][];
+  yaw_arrow?: {
+    start_2d: [number, number];
+    end_2d: [number, number];
+  };
+  center_3d: [number, number, number];
+  dimension: [number, number, number];
   yaw: number;
-}
+};
 
 export const trackingWebSocketService = {
   /**

@@ -59,18 +59,19 @@ class TrackingWebSocketManager:
             if camera_params:
                 for track in tracks:
                     try:
-                        corners_2d = ProjectionService.project_3d_to_2d(
+                        proj_result = ProjectionService.project_3d_to_2d_with_yaw_arrow(
                             np.array(track['center_3d']),
                             np.array(track['dimension']),
                             track['yaw'],
                             camera_params
                         )
                         
-                        if corners_2d:
+                        if proj_result:
                             frame_data["bboxes"].append({
                                 "object_id": track['object_id'],
                                 "class_id": track['class_id'],
-                                "corners_2d": corners_2d,
+                                "corners_2d": proj_result["corners_2d"],
+                                "yaw_arrow": proj_result["yaw_arrow"], 
                                 "center_3d": track['center_3d'],
                                 "dimension": track['dimension'],
                                 "yaw": track['yaw']

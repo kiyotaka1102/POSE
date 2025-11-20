@@ -48,7 +48,7 @@ export default function SurveillancePage() {
               cameraId={selectedCameraData.cameraId}
             />
           </div>
-          <div className="p-4 bg-white border-t flex items-center justify-between">
+          <div className="p-4 bg-white text-gray-700 border-t flex items-center justify-between">
             <div>
               <h3 className="font-bold text-lg">{selectedCameraData.name}</h3>
               <p className="text-sm text-gray-600">{selectedCameraData.zone}</p>
