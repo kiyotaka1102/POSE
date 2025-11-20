@@ -6,6 +6,7 @@ from pathlib import Path
 from app.services import TrackingService, CalibrationService
 from app.websockets import TrackingWebSocketManager, StreamWebSocketManager
 from app.routes import root_router, info_router
+from app.websockets.multi_tracking_manager import MultiCameraTrackingWebSocketManager
 
 # Initialize FastAPI app
 app = FastAPI(title="POSE Backend", version="1.0.0")
@@ -32,6 +33,7 @@ calibration_service = CalibrationService(str(CALIB_FILE))
 # Initialize WebSocket managers
 tracking_ws_manager = TrackingWebSocketManager(tracking_service, calibration_service)
 stream_ws_manager = StreamWebSocketManager(tracking_service, calibration_service, str(VIDEO_DIR))
+multi_camera_ws_manager = MultiCameraTrackingWebSocketManager(tracking_service, calibration_service)
 
 # Mount static files for videos
 if VIDEO_DIR.exists():
@@ -99,6 +101,33 @@ async def websocket_tracks(websocket: WebSocket, camera_id: int):
         import traceback
         traceback.print_exc()
         await tracking_ws_manager.disconnect(websocket, camera_id)
+        
+@app.websocket("/ws/tracks/all")
+async def websocket_multi_camera_tracks(websocket: WebSocket):
+    await multi_camera_ws_manager.connect(websocket)
+    print("[WS] New client connected to /ws/tracks/all")
+
+    try:
+        while True:
+            data = await websocket.receive_json()
+            
+            if data.get("type") == "ping":
+                await websocket.send_json({"type": "pong"})
+                continue
+                
+            if "frame_id" in data:
+                frame_id = int(data["frame_id"])
+                print(f"[MultiCam] Request frame {frame_id} from client")
+                await multi_camera_ws_manager.broadcast_multi_camera_frame(frame_id)
+                
+    except WebSocketDisconnect:
+        await multi_camera_ws_manager.disconnect(websocket)
+    except Exception as e:
+        print(f"[MultiCam] WebSocket error: {e}")
+        import traceback
+        traceback.print_exc()
+    finally:
+        await multi_camera_ws_manager.disconnect(websocket)
 
 
 @app.websocket("/ws/stream/{camera_id}")

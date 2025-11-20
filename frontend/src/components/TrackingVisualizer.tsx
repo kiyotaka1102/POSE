@@ -14,11 +14,9 @@ export default function TrackingVisualizer({ videoUrl, cameraId }: TrackingVisua
   const [isPlaying, setIsPlaying] = useState(false);
   const [totalFrames, setTotalFrames] = useState(0);
   const [ws, setWs] = useState<WebSocket | null>(null);
-
-  // Thêm state cho popup
   const [selectedBBox, setSelectedBBox] = useState<BBox | null>(null);
   const [popupPosition, setPopupPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
-  const [clickedPoint, setClickedPoint] = useState<{ x: number; y: number } | null>(null);
+  const [, setClickedPoint] = useState<{ x: number; y: number } | null>(null);
 
   // Ref để detect click outside
   const popupRef = useRef<HTMLDivElement>(null);
@@ -157,7 +155,6 @@ export default function TrackingVisualizer({ videoUrl, cameraId }: TrackingVisua
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
-    // Scale về kích thước video thật (vì canvas có thể bị scale bởi CSS)
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
     const videoX = x * scaleX;
@@ -166,7 +163,6 @@ export default function TrackingVisualizer({ videoUrl, cameraId }: TrackingVisua
     let clickedBBox: BBox | null = null;
     let minDistance = Infinity;
 
-    // Tìm bbox gần điểm click nhất (trong bán kính ~80px)
     for (const bbox of trackData.bboxes) {
       if (!bbox.corners_2d || bbox.corners_2d.length === 0) continue;
 
@@ -390,7 +386,7 @@ export default function TrackingVisualizer({ videoUrl, cameraId }: TrackingVisua
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-lg overflow-hidden relative"> {/* Thêm relative cho popup absolute */}
+    <div className="bg-white rounded-lg shadow-lg overflow-hidden relative"> 
       <div className="aspect-video bg-black relative">
         {/* Hidden video element */}
         <video
@@ -422,7 +418,7 @@ export default function TrackingVisualizer({ videoUrl, cameraId }: TrackingVisua
       {selectedBBox && (
         <div
           ref={popupRef}
-          className="absolute bg-white rounded-lg shadow-xl p-4 z-50 max-w-xs"
+          className="fixed bg-white rounded-lg shadow-xl p-4 z-50 max-w-xs"
           style={{
             top: `${popupPosition.y}px`,
             left: `${popupPosition.x}px`,

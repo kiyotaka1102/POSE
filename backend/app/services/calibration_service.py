@@ -61,3 +61,10 @@ class CalibrationService:
             'cameras': list(self.cameras.keys()),
             'total_cameras': len(self.cameras)
         }
+    def get_available_camera_ids(self) -> list[int]:
+        """Trả về danh sách tất cả camera ID đã được load thành công"""
+        return sorted(self.cameras.keys())
+
+    def get_all_camera_params(self) -> Dict[int, Dict]:
+        """Trả về dict {camera_id: params} cho tất cả camera"""
+        return self.cameras.copy()
