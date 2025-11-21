@@ -1,7 +1,9 @@
-import { Camera, Video, AlertCircle, Maximize2, Grid3X3 } from 'lucide-react';
-import { useState } from 'react';
+import { Camera, Video, AlertCircle, Maximize2, Grid3X3, Play, Pause } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
 import { videoService } from '../services/videoService';
 import TrackingVisualizer from '../components/TrackingVisualizer';
+import GridTrackingVisualizer from '../components/GridTrackingVisualizer';
+import { multiCameraTrackingWebSocketService, type MultiCameraFrameData, type BBox } from '../services/multitrackingWebsocketService';
 
 interface CameraFeed {
   id: string;
@@ -15,6 +17,14 @@ interface CameraFeed {
 export default function SurveillancePage() {
   const [selectedCamera, setSelectedCamera] = useState<string | null>(null);
   const [gridMode, setGridMode] = useState<'2x2' | '3x3' | '1x1'>('2x2');
+  
+  // Multi-camera tracking state
+  const [multiFrameData, setMultiFrameData] = useState<MultiCameraFrameData | null>(null);
+  const [currentFrame, setCurrentFrame] = useState(1);
+  const [totalFrames, setTotalFrames] = useState(3000);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const wsRef = useRef<WebSocket | null>(null);
+  const playbackIntervalRef = useRef<number | null>(null);
 
   const cameras: CameraFeed[] = [
     { id: 'cam00', name: 'Camera', zone: 'Main Camera', src: videoService.getVideoUrl('Camera.mp4'), status: 'online', cameraId: 0 },
@@ -26,6 +36,112 @@ export default function SurveillancePage() {
     { id: 'cam06', name: 'Camera 06', zone: 'High-Value Storage', src: videoService.getVideoUrl('Camera_06.mp4'), status: 'online', cameraId: 6 },
     { id: 'cam07', name: 'Camera 07', zone: 'Main Entrance', src: videoService.getVideoUrl('Camera_07.mp4'), status: 'online', cameraId: 7 },
   ];
+
+  // Connect to multi-camera WebSocket for grid views
+  useEffect(() => {
+    if (gridMode === '1x1') {
+      // Disconnect multi-camera WebSocket when in fullscreen mode
+      if (wsRef.current) {
+        multiCameraTrackingWebSocketService.disconnect(wsRef.current);
+        wsRef.current = null;
+      }
+      return;
+    }
+
+    // Connect to multi-camera tracking
+    const ws = multiCameraTrackingWebSocketService.connect(
+      (data: MultiCameraFrameData) => {
+        setMultiFrameData(data);
+        setCurrentFrame(data.frame_id);
+      },
+      (error: string) => {
+        console.error('Multi-camera tracking error:', error);
+      },
+      () => {
+        console.log('Multi-camera WebSocket closed');
+      }
+    );
+
+    wsRef.current = ws;
+
+    // Wait for connection and request initial frame
+    const checkAndRequest = () => {
+      if (ws.readyState === WebSocket.OPEN) {
+        multiCameraTrackingWebSocketService.requestFrame(ws, 1);
+      } else if (ws.readyState === WebSocket.CONNECTING) {
+        setTimeout(checkAndRequest, 50);
+      }
+    };
+    checkAndRequest();
+
+    return () => {
+      if (playbackIntervalRef.current) {
+        clearInterval(playbackIntervalRef.current);
+      }
+      multiCameraTrackingWebSocketService.disconnect(ws);
+    };
+  }, [gridMode]);
+
+  // Handle playback
+  useEffect(() => {
+    if (playbackIntervalRef.current) {
+      clearInterval(playbackIntervalRef.current);
+      playbackIntervalRef.current = null;
+    }
+
+    const isGridMode = gridMode === '2x2' || gridMode === '3x3';
+    
+    if (isPlaying && isGridMode) {
+      playbackIntervalRef.current = window.setInterval(() => {
+        setCurrentFrame(prev => {
+          const next = prev + 1;
+          if (next > totalFrames) {
+            setIsPlaying(false);
+            return totalFrames;
+          }
+          
+          if (wsRef.current?.readyState === WebSocket.OPEN) {
+            multiCameraTrackingWebSocketService.requestFrame(wsRef.current, next);
+          }
+          
+          return next;
+        });
+      }, 1000 / 30); // 30 FPS
+    }
+
+    return () => {
+      if (playbackIntervalRef.current) {
+        clearInterval(playbackIntervalRef.current);
+      }
+    };
+  }, [isPlaying, gridMode, totalFrames]);
+
+  const handlePlayPause = () => {
+    setIsPlaying(!isPlaying);
+  };
+
+  const handleFrameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const frameNumber = parseInt(e.target.value);
+    setCurrentFrame(frameNumber);
+    
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      multiCameraTrackingWebSocketService.requestFrame(wsRef.current, frameNumber);
+    }
+  };
+
+  const handleSeek = (offset: number) => {
+    const newFrame = Math.max(1, Math.min(currentFrame + offset, totalFrames));
+    setCurrentFrame(newFrame);
+    
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      multiCameraTrackingWebSocketService.requestFrame(wsRef.current, newFrame);
+    }
+  };
+
+  const getCameraBBoxes = (cameraId: number): BBox[] => {
+    if (!multiFrameData) return [];
+    return multiCameraTrackingWebSocketService.getCameraBBoxes(multiFrameData, cameraId);
+  };
 
   const visibleCameras = gridMode === '3x3' ? cameras : 
                          gridMode === '2x2' ? cameras.slice(0, 4) : 
@@ -132,14 +248,13 @@ export default function SurveillancePage() {
                 setGridMode('1x1');
               }}
             >
-              {/* Video Element */}
-              <video
-                src={camera.src}
-                autoPlay
-                loop
-                muted
-                playsInline
-                className="w-full h-full object-cover"
+              {/* Grid Tracking Visualizer with BBoxes */}
+              <GridTrackingVisualizer
+                videoUrl={camera.src}
+                cameraId={camera.cameraId}
+                bboxes={getCameraBBoxes(camera.cameraId)}
+                isPlaying={isPlaying}
+                currentFrame={currentFrame}
               />
 
               {/* Overlay */}
@@ -166,6 +281,11 @@ export default function SurveillancePage() {
                   <div className="flex items-center gap-2">
                     <Video className="w-5 h-5" />
                     <span className="text-sm">Live • 1080p</span>
+                    {multiFrameData && (
+                      <span className="text-sm ml-2">
+                        • {getCameraBBoxes(camera.cameraId).length} objects
+                      </span>
+                    )}
                   </div>
                   <button
                     onClick={(e) => {
@@ -192,6 +312,75 @@ export default function SurveillancePage() {
             </div>
           ))}
         </div>
+
+        {/* Grid Controls */}
+        {gridMode !== '1x1' && (
+          <div className="mt-6 bg-white rounded-lg shadow-lg p-4 space-y-4">
+            {/* Play/Pause and info */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={handlePlayPause}
+                  className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 font-medium flex items-center gap-2"
+                >
+                  {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                  {isPlaying ? 'Pause' : 'Play'}
+                </button>
+
+                <button
+                  onClick={() => handleSeek(-1)}
+                  className="bg-gray-600 text-white px-3 py-2 rounded hover:bg-gray-700"
+                  title="Previous frame"
+                >
+                  ◀ Frame -1
+                </button>
+
+                <button
+                  onClick={() => handleSeek(1)}
+                  className="bg-gray-600 text-white px-3 py-2 rounded hover:bg-gray-700"
+                  title="Next frame"
+                >
+                  Frame +1 ▶
+                </button>
+              </div>
+
+              <div className="text-gray-700 font-medium">
+                Frame: {currentFrame} / {totalFrames}
+              </div>
+            </div>
+
+            {/* Frame slider */}
+            <div className="space-y-2">
+              <input
+                type="range"
+                min="1"
+                max={totalFrames}
+                value={currentFrame}
+                onChange={handleFrameChange}
+                className="w-full"
+              />
+            </div>
+
+            {/* Tracking info */}
+            {multiFrameData && (
+              <div className="bg-gray-50 rounded p-3 text-sm text-gray-700">
+                <div className="font-bold mb-2">
+                  Total Objects Across All Cameras: {Object.values(multiFrameData.cameras).reduce((sum, cam) => sum + cam.bboxes.length, 0)}
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  {Object.values(multiFrameData.cameras).map((camData) => {
+                    const camera = cameras.find(c => c.cameraId === camData.camera_id);
+                    return (
+                      <div key={camData.camera_id} className="text-xs">
+                        <span className="font-semibold">{camera?.name}:</span> {camData.bboxes.length} objects
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         </div>
       )}

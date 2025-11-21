@@ -67,10 +67,41 @@ async def debug_calibration_info():
     return calibration_service.get_info()
 
 # ============= WebSocket Endpoints =============
+@app.websocket("/ws/tracks/all")
+async def websocket_multi_camera_tracks(websocket: WebSocket):
+    """WebSocket endpoint for streaming multi-camera tracking data"""
+    print("[MultiCam] Connection attempt to /ws/tracks/all")
+    
+    try:
+        await multi_camera_ws_manager.connect(websocket)
+        print("[MultiCam] Client successfully connected")
+        
+        while True:
+            data = await websocket.receive_json()
+            print(f"[MultiCam] Received data: {data}")
+            
+            if data.get("type") == "ping":
+                await websocket.send_json({"type": "pong"})
+                continue
+                
+            if "frame_id" in data:
+                frame_id = int(data["frame_id"])
+                print(f"[MultiCam] Request frame {frame_id} from client")
+                await multi_camera_ws_manager.broadcast_multi_camera_frame(frame_id)
+                
+    except WebSocketDisconnect:
+        print("[MultiCam] Client disconnected normally")
+        await multi_camera_ws_manager.disconnect(websocket)
+    except Exception as e:
+        print(f"[MultiCam] WebSocket error: {e}")
+        import traceback
+        traceback.print_exc()
+        await multi_camera_ws_manager.disconnect(websocket)
+
 
 @app.websocket("/ws/tracks/{camera_id}")
 async def websocket_tracks(websocket: WebSocket, camera_id: int):
-    """WebSocket endpoint for streaming frame tracks"""
+    """WebSocket endpoint for streaming single camera frame tracks"""
     await tracking_ws_manager.connect(websocket, camera_id)
     print(f"[DEBUG] WebSocket handler started for camera {camera_id}")
     try:
@@ -101,33 +132,6 @@ async def websocket_tracks(websocket: WebSocket, camera_id: int):
         import traceback
         traceback.print_exc()
         await tracking_ws_manager.disconnect(websocket, camera_id)
-        
-@app.websocket("/ws/tracks/all")
-async def websocket_multi_camera_tracks(websocket: WebSocket):
-    await multi_camera_ws_manager.connect(websocket)
-    print("[WS] New client connected to /ws/tracks/all")
-
-    try:
-        while True:
-            data = await websocket.receive_json()
-            
-            if data.get("type") == "ping":
-                await websocket.send_json({"type": "pong"})
-                continue
-                
-            if "frame_id" in data:
-                frame_id = int(data["frame_id"])
-                print(f"[MultiCam] Request frame {frame_id} from client")
-                await multi_camera_ws_manager.broadcast_multi_camera_frame(frame_id)
-                
-    except WebSocketDisconnect:
-        await multi_camera_ws_manager.disconnect(websocket)
-    except Exception as e:
-        print(f"[MultiCam] WebSocket error: {e}")
-        import traceback
-        traceback.print_exc()
-    finally:
-        await multi_camera_ws_manager.disconnect(websocket)
 
 
 @app.websocket("/ws/stream/{camera_id}")
@@ -139,4 +143,3 @@ async def websocket_stream(websocket: WebSocket, camera_id: int):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
-
