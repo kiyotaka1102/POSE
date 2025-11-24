@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import Sidebar from '../components/Sidebar';
 import Topbar from '../components/Topbar';
-
+import FloatingChat from '../components/FloatingChat';
 interface HomeLayoutProps {
   sidebarOpen: boolean;
   setSidebarOpen: (open: boolean) => void;
@@ -28,6 +28,7 @@ export default function HomeLayout({
       <div className="flex-1 flex flex-col overflow-hidden">
         <Topbar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
         {children}
+        <FloatingChat />
       </div>
     </div>
   );

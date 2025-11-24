@@ -37,7 +37,15 @@ multi_camera_ws_manager = MultiCameraTrackingWebSocketManager(tracking_service, 
 
 # Mount static files for videos
 if VIDEO_DIR.exists():
-    app.mount("/api/videos", StaticFiles(directory=VIDEO_DIR), name="videos")
+    video_static_files = StaticFiles(directory=VIDEO_DIR)
+    video_cors_app = CORSMiddleware(
+        app=video_static_files,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    app.mount("/api/videos", video_cors_app, name="videos")
 
 # Register routes
 app.include_router(root_router)
@@ -102,32 +110,32 @@ async def websocket_tracks(websocket: WebSocket, camera_id: int):
         traceback.print_exc()
         await tracking_ws_manager.disconnect(websocket, camera_id)
         
-@app.websocket("/ws/tracks/all")
-async def websocket_multi_camera_tracks(websocket: WebSocket):
-    await multi_camera_ws_manager.connect(websocket)
-    print("[WS] New client connected to /ws/tracks/all")
+# @app.websocket("/ws/tracks/all")
+# async def websocket_multi_camera_tracks(websocket: WebSocket):
+#     await multi_camera_ws_manager.connect(websocket)
+#     print("[WS] New client connected to /ws/tracks/all")
 
-    try:
-        while True:
-            data = await websocket.receive_json()
+#     try:
+#         while True:
+#             data = await websocket.receive_json()
             
-            if data.get("type") == "ping":
-                await websocket.send_json({"type": "pong"})
-                continue
+#             if data.get("type") == "ping":
+#                 await websocket.send_json({"type": "pong"})
+#                 continue
                 
-            if "frame_id" in data:
-                frame_id = int(data["frame_id"])
-                print(f"[MultiCam] Request frame {frame_id} from client")
-                await multi_camera_ws_manager.broadcast_multi_camera_frame(frame_id)
+#             if "frame_id" in data:
+#                 frame_id = int(data["frame_id"])
+#                 print(f"[MultiCam] Request frame {frame_id} from client")
+#                 await multi_camera_ws_manager.broadcast_multi_camera_frame(frame_id)
                 
-    except WebSocketDisconnect:
-        await multi_camera_ws_manager.disconnect(websocket)
-    except Exception as e:
-        print(f"[MultiCam] WebSocket error: {e}")
-        import traceback
-        traceback.print_exc()
-    finally:
-        await multi_camera_ws_manager.disconnect(websocket)
+#     except WebSocketDisconnect:
+#         await multi_camera_ws_manager.disconnect(websocket)
+#     except Exception as e:
+#         print(f"[MultiCam] WebSocket error: {e}")
+#         import traceback
+#         traceback.print_exc()
+#     finally:
+#         await multi_camera_ws_manager.disconnect(websocket)
 
 
 @app.websocket("/ws/stream/{camera_id}")

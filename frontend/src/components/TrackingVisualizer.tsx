@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { trackingWebSocketService, type FrameTrackData, type BBox } from '../services/trackingWebSocketService';
+import { Grid3X3 } from 'lucide-react';
 
 interface TrackingVisualizerProps {
   videoUrl: string;
   cameraId: number;
+  initialTime: number;
+  onReturnToGrid: (currentTime: number) => void;
 }
 
-export default function TrackingVisualizer({ videoUrl, cameraId }: TrackingVisualizerProps) {
+export default function TrackingVisualizer({ videoUrl, cameraId, initialTime, onReturnToGrid }: TrackingVisualizerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [trackData, setTrackData] = useState<FrameTrackData | null>(null);
@@ -16,7 +19,6 @@ export default function TrackingVisualizer({ videoUrl, cameraId }: TrackingVisua
   const [ws, setWs] = useState<WebSocket | null>(null);
   const [selectedBBox, setSelectedBBox] = useState<BBox | null>(null);
   const [popupPosition, setPopupPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
-  const [, setClickedPoint] = useState<{ x: number; y: number } | null>(null);
 
   // Ref để detect click outside
   const popupRef = useRef<HTMLDivElement>(null);
@@ -26,7 +28,6 @@ export default function TrackingVisualizer({ videoUrl, cameraId }: TrackingVisua
     const handleClickOutside = (e: MouseEvent) => {
       if (popupRef.current && !popupRef.current.contains(e.target as Node)) {
         setSelectedBBox(null);
-        setClickedPoint(null);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -38,13 +39,21 @@ export default function TrackingVisualizer({ videoUrl, cameraId }: TrackingVisua
     if (!videoRef.current) return;
 
     const video = videoRef.current;
-
+    console.log('Setting up video and WebSocket for cameraId:', cameraId);
     const handleLoadedMetadata = () => {
       const fps = 30; 
       const duration = video.duration;
       const totalFrames = Math.floor(duration * fps);
       setTotalFrames(totalFrames);
-
+      console.log('Video metadata loaded. Duration:', duration, 'Total Frames:', totalFrames, 'Initial Time:', initialTime);
+      if (initialTime > 0 && initialTime <= duration) {
+          video.currentTime = initialTime;
+          const initialFrame = Math.floor(initialTime * fps) + 1;
+          console.log('Setting initial frame to:', initialFrame);
+          setCurrentFrame(initialFrame);
+      } else {
+          setCurrentFrame(1);
+      }
       // Connect to tracking WebSocket
       const newWs = trackingWebSocketService.connectToTracks(
         cameraId,
@@ -58,11 +67,11 @@ export default function TrackingVisualizer({ videoUrl, cameraId }: TrackingVisua
 
       setWs(newWs);
 
-      // Wait for connection to be ready, then request frame 1 (tracking data starts from frame 1)
       const checkAndRequest = () => {
         if (newWs.readyState === WebSocket.OPEN) {
           console.log('WebSocket ready, requesting frame 1');
-          trackingWebSocketService.requestFrame(newWs, 1);
+          const frameToRequest = initialTime > 0 ? Math.floor(initialTime * fps) + 1 : 1;
+          trackingWebSocketService.requestFrame(newWs, frameToRequest);
         } else if (newWs.readyState === WebSocket.CONNECTING) {
           // Still connecting, retry soon
           setTimeout(checkAndRequest, 50);
@@ -82,8 +91,11 @@ export default function TrackingVisualizer({ videoUrl, cameraId }: TrackingVisua
       video.removeEventListener('loadedmetadata', handleLoadedMetadata);
       video.removeEventListener('play', () => setIsPlaying(true));
       video.removeEventListener('pause', () => setIsPlaying(false));
+
+      ws?.close();
+      setWs(null);
     };
-  }, [cameraId]);
+  }, [cameraId, initialTime, onReturnToGrid]);
 
   // Update current frame and request tracking data
   useEffect(() => {
@@ -94,7 +106,7 @@ export default function TrackingVisualizer({ videoUrl, cameraId }: TrackingVisua
 
     const handleTimeUpdate = () => {
       const fps = 30;
-      const frameNumber = Math.floor(video.currentTime * fps) + 1; // +1 because tracking data starts from frame 1
+      const frameNumber = Math.floor(video.currentTime * fps) + 1;
       setCurrentFrame(frameNumber);
 
       // Only request if frame changed to reduce WebSocket traffic
@@ -177,18 +189,14 @@ export default function TrackingVisualizer({ videoUrl, cameraId }: TrackingVisua
     }
 
     if (clickedBBox) {
-      // Nếu click lại chính object đang chọn → tắt
       if (selectedBBox?.object_id === clickedBBox.object_id) {
         setSelectedBBox(null);
-        setClickedPoint(null);
       } else {
         setSelectedBBox(clickedBBox);
-        setClickedPoint({ x: e.clientX, y: e.clientY });
-        setPopupPosition({ x: e.clientX, y: e.clientY + 10 }); // mũi tên xuống dưới
+        setPopupPosition({ x, y: y + 10 }); // mũi tên xuống dưới
       }
     } else {
       setSelectedBBox(null);
-      setClickedPoint(null);
     }
   }, [trackData, selectedBBox]);
 
@@ -418,7 +426,7 @@ export default function TrackingVisualizer({ videoUrl, cameraId }: TrackingVisua
       {selectedBBox && (
         <div
           ref={popupRef}
-          className="fixed bg-white rounded-lg shadow-xl p-4 z-50 max-w-xs"
+          className="absolute bg-white rounded-lg shadow-xl p-4 z-50 max-w-xs pointer-events-auto"
           style={{
             top: `${popupPosition.y}px`,
             left: `${popupPosition.x}px`,
@@ -514,6 +522,21 @@ export default function TrackingVisualizer({ videoUrl, cameraId }: TrackingVisua
           </div>
         )}
       </div>
+        <div className="absolute top-4 right-4 z-10">
+          <button
+            onClick={() => {
+              if (videoRef.current) {
+                const currentTime = videoRef.current.currentTime;
+                // videoRef.current.pause();
+                onReturnToGrid(currentTime);
+              }
+            }}
+            className="bg-white/90 hover:bg-white text-gray-800 px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 font-medium backdrop-blur-sm"
+          >
+            <Grid3X3 className="w-5 h-5" />
+            Back to Grid
+          </button>
+        </div>
     </div>
   );
 }

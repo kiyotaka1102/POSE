@@ -1,5 +1,5 @@
 import { Camera, Video, AlertCircle, Maximize2, Grid3X3 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { videoService } from '../services/videoService';
 import TrackingVisualizer from '../components/TrackingVisualizer';
 
@@ -15,7 +15,9 @@ interface CameraFeed {
 export default function SurveillancePage() {
   const [selectedCamera, setSelectedCamera] = useState<string | null>(null);
   const [gridMode, setGridMode] = useState<'2x2' | '3x3' | '1x1'>('2x2');
-
+  // const [cameraTimes, setCameraTimes] = useState<Record<number, number>>({});
+  const [syncTime, setSyncTime] = useState<number>(0);
+  const videoRefs = useRef<Record<string, HTMLVideoElement | null>>({});
   const cameras: CameraFeed[] = [
     { id: 'cam00', name: 'Camera', zone: 'Main Camera', src: videoService.getVideoUrl('Camera.mp4'), status: 'online', cameraId: 0 },
     { id: 'cam01', name: 'Camera 01', zone: 'Loading Dock A', src: videoService.getVideoUrl('Camera_01.mp4'), status: 'online', cameraId: 1 },
@@ -26,17 +28,49 @@ export default function SurveillancePage() {
     { id: 'cam06', name: 'Camera 06', zone: 'High-Value Storage', src: videoService.getVideoUrl('Camera_06.mp4'), status: 'online', cameraId: 6 },
     { id: 'cam07', name: 'Camera 07', zone: 'Main Entrance', src: videoService.getVideoUrl('Camera_07.mp4'), status: 'online', cameraId: 7 },
   ];
+  useEffect(() => {
+    const syncAllVideos = () => {
+      Object.keys(videoRefs.current).forEach(id => {
+        const video = videoRefs.current[id];
+        if (video && video.readyState >= 1) { // HAVE_METADATA trở lên
+          if (Math.abs(video.currentTime - syncTime) > 0.3) {
+            video.currentTime = syncTime;
+          }
+        }
+      });
+    };
 
+    syncAllVideos();
+    const interval = setInterval(syncAllVideos, 300);
+    const timeout = setTimeout(() => clearInterval(interval), 8000);
+
+    return () => {
+      clearInterval(interval);
+      clearTimeout(timeout);
+    };
+  }, [syncTime]);
   const visibleCameras = gridMode === '3x3' ? cameras : 
                          gridMode === '2x2' ? cameras.slice(0, 4) : 
                          cameras.filter(c => c.id === selectedCamera);
-
   const gridCols = gridMode === '3x3' ? 'grid-cols-3' : 
                    gridMode === '2x2' ? 'grid-cols-2' : 
                    'grid-cols-1';
-
+  const handleReturnToGrid = (currentTime: number) => {
+        setSyncTime(currentTime); 
+        setGridMode('2x2');
+        setSelectedCamera(null);
+    };
+  const handleGridVideoTimeUpdate = (newTime: number) => {
+        setSyncTime(newTime);
+    };
+  const initialTimeForSelected = syncTime;
   const selectedCameraData = cameras.find(c => c.id === selectedCamera);
 
+  const handleCameraSelect = (cameraId: string, currentTimeInSeconds: number) => {
+        setSelectedCamera(cameraId);
+        setSyncTime(currentTimeInSeconds); 
+        setGridMode('1x1');
+    };
   return (
     <main className="flex-1 overflow-y-auto bg-gray-50">
       {/* Fullscreen Tracking View */}
@@ -46,6 +80,8 @@ export default function SurveillancePage() {
             <TrackingVisualizer 
               videoUrl={selectedCameraData.src} 
               cameraId={selectedCameraData.cameraId}
+              initialTime={initialTimeForSelected}
+              onReturnToGrid={handleReturnToGrid}
             />
           </div>
           <div className="p-4 bg-white text-gray-700 border-t flex items-center justify-between">
@@ -53,16 +89,6 @@ export default function SurveillancePage() {
               <h3 className="font-bold text-lg">{selectedCameraData.name}</h3>
               <p className="text-sm text-gray-600">{selectedCameraData.zone}</p>
             </div>
-            <button
-              onClick={() => {
-                setGridMode('2x2');
-                setSelectedCamera(null);
-              }}
-              className="inline-flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg shadow-md hover:bg-blue-700 transition-colors font-medium"
-            >
-              <Grid3X3 className="w-5 h-5" />
-              Back to Grid View
-            </button>
           </div>
         </div>
       )}
@@ -81,12 +107,6 @@ export default function SurveillancePage() {
               <p className="text-gray-600 mt-2">Live monitoring from all warehouse cameras</p>
             </div>
             <div className="flex items-center gap-3">
-              <button
-                onClick={() => setGridMode('1x1')}
-                className={`p-3 rounded-lg border border-gray-300 hover:bg-gray-100`}
-              >
-                <Maximize2 className="w-5 h-5" />
-              </button>
               <button
                 onClick={() => setGridMode('2x2')}
                 className={`p-3 rounded-lg border ${gridMode === '2x2' ? 'bg-blue-50 border-blue-300 text-blue-700' : 'border-gray-300 hover:bg-gray-100'}`}
@@ -127,18 +147,33 @@ export default function SurveillancePage() {
             <div
               key={camera.id}
               className="relative bg-black rounded-xl overflow-hidden shadow-lg group cursor-pointer"
-              onClick={() => {
-                setSelectedCamera(camera.id);
-                setGridMode('1x1');
+              onClick={(e) => {
+                const videoElement = e.currentTarget.querySelector('video');
+                if (videoElement) {
+                  handleCameraSelect(camera.id, videoElement.currentTime);
+                }
+
               }}
             >
               {/* Video Element */}
               <video
+                key= {camera.id}
+                ref={(el) => (videoRefs.current[camera.id] = el)}
                 src={camera.src}
                 autoPlay
                 loop
                 muted
                 playsInline
+                onLoadedMetadata={(e) => {
+                  if (syncTime > 0) {
+                    e.currentTarget.currentTime = syncTime;
+                  }
+                }}
+                onTimeUpdate={(e) => {
+                                    if (camera.id === 'cam00') {
+                                        handleGridVideoTimeUpdate(e.currentTarget.currentTime);
+                                    }
+                                }}
                 className="w-full h-full object-cover"
               />
 
@@ -170,6 +205,10 @@ export default function SurveillancePage() {
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
+                      const videoElement = e.currentTarget.closest('.relative').querySelector('video');
+                      if (videoElement) {
+                        handleCameraSelect(camera.id, videoElement.currentTime);
+                      }
                       setSelectedCamera(camera.id);
                       setGridMode('1x1');
                     }}
