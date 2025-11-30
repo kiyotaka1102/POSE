@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { Lock, Mail, Eye, EyeOff } from 'lucide-react';
+import { Lock, Mail, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { authService } from '../services/authService';
+
 interface LoginPageProps {
   onLogin: (email: string, password: string) => void;
 }
@@ -8,10 +10,26 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = () => {
-    if (email && password) {
+  const handleSubmit = async () => {
+    if (!email || !password) {
+      setError('Please enter both email and password');
+      return;
+    }
+
+    setError(null);
+    setLoading(true);
+
+    try {
+      await authService.login(email, password);
+      // On successful login, call the parent's onLogin handler
       onLogin(email, password);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Login failed. Please check your credentials.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -86,14 +104,21 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
               </div>
             </div>
 
+            {/* Error Message */}
+            {error && (
+              <div className="flex items-center gap-2 p-3 bg-red-500/20 border border-red-500/50 rounded-xl text-red-200 text-sm">
+                <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
 
             {/* Sign In Button */}
             <button
               onClick={handleSubmit}
-              disabled={!email || !password}
+              disabled={!email || !password || loading}
               className="w-full py-4 px-6 bg-linear-to-r from-blue-600 to-purple-600 text-white text-lg font-bold rounded-xl hover:from-blue-700 hover:to-purple-700 transform hover:scale-105 active:scale-95 transition-all duration-200 shadow-2xl hover:shadow-purple-500/50 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none"
             >
-              Sign In
+              {loading ? 'Signing in...' : 'Sign In'}
             </button>
 
           </div>

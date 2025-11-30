@@ -48,3 +48,28 @@ class CalibrationInfo(BaseModel):
     """Calibration file information"""
     cameras: List[int]
     total_cameras: int
+
+
+# Authentication Schemas
+class LoginRequest(BaseModel):
+    """Login request model"""
+    emailAddress: str
+    password: str
+
+
+class UserResponse(BaseModel):
+    """User response model"""
+    id: int
+    fullName: str
+    emailAddress: str
+    role: str
+    address: Optional[str] = None
+    dateOfBirth: Optional[str] = None
+    gender: Optional[str] = None
+
+
+class LoginResponse(BaseModel):
+    """Login response model"""
+    access_token: str
+    token_type: str = "bearer"
+    user: UserResponse

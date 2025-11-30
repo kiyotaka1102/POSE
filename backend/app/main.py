@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from app.config import get_settings
 from app.db import init_database, close_database
 from app.middleware import setup_cors, LoggingMiddleware, setup_exception_handlers
-from app.routes import root_router, info_router, websocket_router
+from app.routes import root_router, info_router, websocket_router, auth_router
 
 settings = get_settings()
 
@@ -54,6 +54,7 @@ setup_exception_handlers(app)
 app.include_router(root_router)
 app.include_router(info_router)
 app.include_router(websocket_router)
+app.include_router(auth_router)
 
 
 if __name__ == "__main__":

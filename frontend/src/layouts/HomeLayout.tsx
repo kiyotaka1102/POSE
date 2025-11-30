@@ -2,6 +2,8 @@ import type { ReactNode } from 'react';
 import Sidebar from '../components/Sidebar';
 import Topbar from '../components/Topbar';
 import FloatingChat from '../components/FloatingChat';
+import type { User } from '../services/authService';
+
 interface HomeLayoutProps {
   sidebarOpen: boolean;
   setSidebarOpen: (open: boolean) => void;
@@ -9,6 +11,7 @@ interface HomeLayoutProps {
   setActiveMenu: (menu: string) => void;
   children: ReactNode;
   onLogout: () => void;
+  currentUser: User | null;
 }
 
 export default function HomeLayout({
@@ -18,6 +21,7 @@ export default function HomeLayout({
   setActiveMenu,
   children,
   onLogout,
+  currentUser,
 }: HomeLayoutProps) {
   return (
     <div className="flex h-screen w-screen bg-linear-to-br from-blue-200 via-cyan-50 to-blue-300">
@@ -26,6 +30,7 @@ export default function HomeLayout({
         activeMenu={activeMenu}
         setActiveMenu={setActiveMenu}
         onLogout={onLogout}
+        currentUser={currentUser}
       />
 
       <div className="flex-1 flex flex-col overflow-hidden">

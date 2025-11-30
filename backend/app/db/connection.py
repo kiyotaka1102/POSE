@@ -19,14 +19,27 @@ async def init_database() -> None:
     
     try:
         # Build connection URL
+        # Support both mongodb:// and mongodb+srv:// URLs
+        connection_url = settings.MONGODB_URL
+        
+        # If URL already contains credentials (mongodb+srv://user:pass@host), use it directly
+        # Otherwise, if username/password are provided separately, construct the URL
         if settings.MONGODB_USERNAME and settings.MONGODB_PASSWORD:
-            # Format: mongodb://username:password@host:port/dbname
-            connection_url = (
-                f"mongodb://{settings.MONGODB_USERNAME}:{settings.MONGODB_PASSWORD}"
-                f"@{settings.MONGODB_URL.replace('mongodb://', '')}"
-            )
-        else:
-            connection_url = settings.MONGODB_URL
+            # Check if URL already has credentials
+            if '@' not in connection_url:
+                # URL doesn't have credentials, add them
+                if connection_url.startswith('mongodb+srv://'):
+                    # mongodb+srv:// format
+                    connection_url = connection_url.replace(
+                        'mongodb+srv://',
+                        f'mongodb+srv://{settings.MONGODB_USERNAME}:{settings.MONGODB_PASSWORD}@'
+                    )
+                elif connection_url.startswith('mongodb://'):
+                    # mongodb:// format
+                    connection_url = connection_url.replace(
+                        'mongodb://',
+                        f'mongodb://{settings.MONGODB_USERNAME}:{settings.MONGODB_PASSWORD}@'
+                    )
         
         # Create client
         _client = AsyncIOMotorClient(

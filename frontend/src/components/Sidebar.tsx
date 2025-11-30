@@ -4,6 +4,7 @@ import {
   LogOut, User, ChevronDown 
 } from 'lucide-react';
 import { type LucideIcon } from 'lucide-react';
+import type { User as UserType } from '../services/authService';
 
 interface MenuItem {
   id: string;
@@ -16,9 +17,19 @@ interface SidebarProps {
   activeMenu: string;
   setActiveMenu: (menu: string) => void;
   onLogout: () => void;
+  currentUser: UserType | null;
 }
 
-export default function Sidebar({ sidebarOpen, activeMenu, setActiveMenu, onLogout }: SidebarProps) {
+// Helper function to get user initials
+function getInitials(fullName: string): string {
+  const names = fullName.trim().split(/\s+/);
+  if (names.length >= 2) {
+    return (names[0][0] + names[names.length - 1][0]).toUpperCase();
+  }
+  return fullName.substring(0, 2).toUpperCase();
+}
+
+export default function Sidebar({ sidebarOpen, activeMenu, setActiveMenu, onLogout, currentUser }: SidebarProps) {
   const [profileOpen, setProfileOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -102,11 +113,15 @@ export default function Sidebar({ sidebarOpen, activeMenu, setActiveMenu, onLogo
             className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-white/10 transition-all duration-200 group"
           >
             <div className="w-10 h-10 rounded-full bg-gradient-to-br from-cyan-400 to-blue-500 flex items-center justify-center text-white text-sm font-bold shrink-0 shadow-md">
-              AD
+              {currentUser ? getInitials(currentUser.fullName) : 'U'}
             </div>
             <div className="flex-1 text-left min-w-0">
-              <p className="text-sm font-semibold text-gray-800 truncate">Admin User</p>
-              <p className="text-xs text-gray-600 truncate">admin@warehouse.com</p>
+              <p className="text-sm font-semibold text-gray-800 truncate">
+                {currentUser?.fullName || 'User'}
+              </p>
+              <p className="text-xs text-gray-600 truncate">
+                {currentUser?.emailAddress || 'No email'}
+              </p>
             </div>
             <ChevronDown className={`w-4 h-4 text-gray-600 transition-transform duration-200 ${profileOpen ? 'rotate-180' : ''}`} />
           </button>

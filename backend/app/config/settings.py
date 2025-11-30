@@ -1,7 +1,7 @@
 """Application settings using Pydantic Settings."""
 from functools import lru_cache
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from pydantic import Field
 from pydantic_settings import BaseSettings
@@ -66,8 +66,8 @@ class Settings(BaseSettings):
         default="pose_db",
         description="MongoDB database name"
     )
-    MONGODB_USERNAME: str | None = None
-    MONGODB_PASSWORD: str | None = None
+    MONGODB_USERNAME: Optional[str] = None
+    MONGODB_PASSWORD: Optional[str] = None
     
     # Tracking Service
     EXPECTED_SCENE_ID: int = 17
@@ -76,6 +76,14 @@ class Settings(BaseSettings):
     WS_MAX_CONNECTIONS: int = 100
     WS_HEARTBEAT_INTERVAL: int = 30  # seconds
     WS_FRAME_CACHE_SIZE: int = 100
+    
+    # Authentication
+    JWT_SECRET_KEY: str = Field(
+        default="your-secret-key-change-in-production",
+        description="Secret key for JWT token signing"
+    )
+    JWT_ALGORITHM: str = "HS256"
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 30 * 24 * 60  # 30 days
     
     class Config:
         """Pydantic config."""

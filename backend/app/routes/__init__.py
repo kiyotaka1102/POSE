@@ -13,5 +13,6 @@ All business logic should be in the services layer.
 from .root import router as root_router
 from .info import router as info_router
 from .websocket_routes import router as websocket_router
+from .auth_routes import router as auth_router
 
-__all__ = ['root_router', 'info_router', 'websocket_router']
+__all__ = ['root_router', 'info_router', 'websocket_router', 'auth_router']

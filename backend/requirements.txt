@@ -1,8 +1,9 @@
 fastapi==0.104.1
 uvicorn==0.24.0
 python-multipart==0.0.6
+numpy==1.26.4
 opencv-python==4.8.1.78
-numpy==1.24.3
+faiss-cpu==1.12.0
 websockets==12.0
 
 # Configuration
@@ -13,3 +14,7 @@ pydantic-settings==2.1.0
 motor==3.3.2
 pymongo==4.6.0
 
+# Authentication
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+bcrypt==3.2.0
