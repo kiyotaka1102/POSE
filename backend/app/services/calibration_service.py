@@ -68,3 +68,4 @@ class CalibrationService:
     def get_all_camera_params(self) -> Dict[int, Dict]:
         """Trả về dict {camera_id: params} cho tất cả camera"""
         return self.cameras.copy()
+

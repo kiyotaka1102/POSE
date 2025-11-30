@@ -86,3 +86,4 @@ class TrackingService:
             'max_frame': max(frame_ids),
             'total_tracks': sum(len(t) for t in self.tracks.values())
         }
+

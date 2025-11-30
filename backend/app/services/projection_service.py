@@ -150,3 +150,4 @@ class ProjectionService:
         x_map = int((gx + x_origin) * scale)
         y_map = int((y_origin - gy) * scale)
         return x_map, y_map
+
