@@ -109,13 +109,13 @@ export default function SurveillancePage() {
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setGridMode('2x2')}
-                className={`p-3 rounded-lg border ${gridMode === '2x2' ? 'bg-blue-50 border-blue-300 text-blue-700' : 'border-gray-300 hover:bg-gray-100'}`}
+                className={`bg-cyan-400 p-3 rounded-lg border ${gridMode === '2x2' ? 'bg-blue-50 border-blue-300 text-blue-700' : 'border-gray-300 hover:bg-gray-100'}`}
               >
                 <Grid3X3 className="w-5 h-5" />
               </button>
               <button
                 onClick={() => setGridMode('3x3')}
-                className={`p-3 rounded-lg border ${gridMode === '3x3' ? 'bg-blue-50 border-blue-300 text-blue-700' : 'border-gray-300 hover:bg-gray-100'}`}
+                className={`bg-cyan-400 p-3 rounded-lg border ${gridMode === '3x3' ? 'bg-blue-50 border-blue-300 text-blue-700' : 'border-gray-300 hover:bg-gray-100'}`}
               >
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />

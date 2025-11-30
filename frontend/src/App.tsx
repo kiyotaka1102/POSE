@@ -1,40 +1,37 @@
-// App.tsx
 import { useState } from 'react';
 import HomeLayout from './layouts/HomeLayout';
-import DashboardHome from './pages/DashboardHome';
 import SurveillancePage from './pages/Surveillance';
-// import TrackingPage from './pages/Tracking'; 
-// import AnalyticsPage from './pages/AnalyticsPage'; 
-// import InventoryPage from './pages/InventoryPage';
-// import PeopleTrackingPage from './pages/PeopleTrackingPage';
-// import ChatbotPage from './pages/ChatbotPage';
-// import SettingsPage from './pages/SettingsPage';
+import ComingSoon from './pages/ComingSoon';
+import LoginPage from './pages/Login';
 
 function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
-  const [activeMenu, setActiveMenu] = useState<string>('dashboard');
+  const [activeMenu, setActiveMenu] = useState<string>('surveillance'); 
 
-  // Map menu key to actual page component
-  const renderPage = () => {
-    switch (activeMenu) {
-      case 'dashboard':
-        return <DashboardHome activeMenu={activeMenu} />;
-      case 'surveillance':
-        return <SurveillancePage />;
-      // case 'analytics':
-      //   return <AnalyticsPage />;
-      // case 'inventory':
-      //   return <InventoryPage />;
-      // case 'people':
-      //   return <PeopleTrackingPage />;
-      // case 'chatbot':
-      //   return <ChatbotPage />;
-      // case 'settings':
-      //   return <SettingsPage />;
-      default:
-        return <DashboardHome activeMenu={activeMenu} />;
-    }
+  const handleLogin = (email: string, password: string) => {
+    console.log('Login with:', email, password);
+    setIsAuthenticated(true);
+    setActiveMenu('surveillance'); 
   };
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    setActiveMenu('surveillance');
+    setSidebarOpen(true);
+  };
+
+  const renderPage = () => {
+    if (activeMenu === 'surveillance') {
+      return <SurveillancePage />;
+    }
+
+    return <ComingSoon />;
+  };
+
+  if (!isAuthenticated) {
+    return <LoginPage onLogin={handleLogin} />;
+  }
 
   return (
     <HomeLayout
@@ -42,6 +39,7 @@ function App() {
       setSidebarOpen={setSidebarOpen}
       activeMenu={activeMenu}
       setActiveMenu={setActiveMenu}
+      onLogout={handleLogout}
     >
       {renderPage()}
     </HomeLayout>

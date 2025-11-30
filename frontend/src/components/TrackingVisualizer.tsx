@@ -462,14 +462,14 @@ export default function TrackingVisualizer({ videoUrl, cameraId, initialTime, on
           <div className="flex items-center gap-4">
             <button
               onClick={handlePlayPause}
-              className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 font-medium"
+              className="bg-cyan-600 text-white px-4 py-2 rounded hover:bg-cyan-700 font-medium"
             >
               {isPlaying ? 'Pause' : 'Play'}
             </button>
 
             <button
               onClick={() => handleSeek(-1)}
-              className="bg-gray-600 text-white px-3 py-2 rounded hover:bg-gray-700"
+              className="bg-cyan-600 text-white px-3 py-2 rounded hover:bg-cyan-700"
               title="Previous frame"
             >
               ⏮ Frame -1
@@ -477,7 +477,7 @@ export default function TrackingVisualizer({ videoUrl, cameraId, initialTime, on
 
             <button
               onClick={() => handleSeek(1)}
-              className="bg-gray-600 text-white px-3 py-2 rounded hover:bg-gray-700"
+              className="bg-cyan-600 text-white px-3 py-2 rounded hover:bg-cyan-700"
               title="Next frame"
             >
               Frame +1 ⏭
@@ -531,10 +531,10 @@ export default function TrackingVisualizer({ videoUrl, cameraId, initialTime, on
                 onReturnToGrid(currentTime);
               }
             }}
-            className="bg-white/90 hover:bg-white text-gray-800 px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 font-medium backdrop-blur-sm"
+            className="bg-cyan-500 hover:bg-white text-gray-800 px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 font-medium backdrop-blur-sm"
           >
             <Grid3X3 className="w-5 h-5" />
-            Back to Grid
+            Back
           </button>
         </div>
     </div>

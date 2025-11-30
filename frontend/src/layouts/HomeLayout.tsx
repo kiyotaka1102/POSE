@@ -8,6 +8,7 @@ interface HomeLayoutProps {
   activeMenu: string;
   setActiveMenu: (menu: string) => void;
   children: ReactNode;
+  onLogout: () => void;
 }
 
 export default function HomeLayout({
@@ -16,6 +17,7 @@ export default function HomeLayout({
   activeMenu,
   setActiveMenu,
   children,
+  onLogout,
 }: HomeLayoutProps) {
   return (
     <div className="flex h-screen w-screen bg-linear-to-br from-blue-200 via-cyan-50 to-blue-300">
@@ -23,6 +25,7 @@ export default function HomeLayout({
         sidebarOpen={sidebarOpen}
         activeMenu={activeMenu}
         setActiveMenu={setActiveMenu}
+        onLogout={onLogout}
       />
 
       <div className="flex-1 flex flex-col overflow-hidden">
