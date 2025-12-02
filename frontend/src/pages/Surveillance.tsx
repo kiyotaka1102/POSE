@@ -66,9 +66,20 @@ export default function SurveillancePage() {
   const initialTimeForSelected = syncTime;
   const selectedCameraData = cameras.find(c => c.id === selectedCamera);
 
-  const handleCameraSelect = (cameraId: string, currentTimeInSeconds: number) => {
+  const handleCameraSelect = (cameraId: string, currentTimeInSeconds?: number) => {
+        // Nếu không có currentTimeInSeconds, lấy từ videoRefs
+        let timeToSync = currentTimeInSeconds;
+        if (timeToSync === undefined || timeToSync === null) {
+          const videoElement = videoRefs.current[cameraId];
+          if (videoElement && videoElement.readyState >= 1) {
+            timeToSync = videoElement.currentTime;
+          } else {
+            timeToSync = syncTime; // Fallback to current syncTime
+          }
+        }
+        
         setSelectedCamera(cameraId);
-        setSyncTime(currentTimeInSeconds); 
+        setSyncTime(timeToSync); 
         setGridMode('1x1');
     };
   return (
@@ -205,12 +216,12 @@ export default function SurveillancePage() {
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      const videoElement = e.currentTarget.closest('.relative').querySelector('video');
-                      if (videoElement) {
+                      const videoElement = videoRefs.current[camera.id];
+                      if (videoElement && videoElement.readyState >= 1) {
                         handleCameraSelect(camera.id, videoElement.currentTime);
+                      } else {
+                        handleCameraSelect(camera.id);
                       }
-                      setSelectedCamera(camera.id);
-                      setGridMode('1x1');
                     }}
                     className="opacity-0 group-hover:opacity-100 transition-opacity bg-white/20 backdrop-blur-sm p-2 rounded-lg hover:bg-white/30"
                   >

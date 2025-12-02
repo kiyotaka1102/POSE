@@ -69,7 +69,8 @@ export default function TrackingVisualizer({ videoUrl, cameraId, initialTime, on
 
       const checkAndRequest = () => {
         if (newWs.readyState === WebSocket.OPEN) {
-          console.log('WebSocket ready, requesting frame 1');
+          console.log('WebSocket ready, requesting frame');
+          const fps = 30;
           const frameToRequest = initialTime > 0 ? Math.floor(initialTime * fps) + 1 : 1;
           trackingWebSocketService.requestFrame(newWs, frameToRequest);
         } else if (newWs.readyState === WebSocket.CONNECTING) {
@@ -95,7 +96,33 @@ export default function TrackingVisualizer({ videoUrl, cameraId, initialTime, on
       ws?.close();
       setWs(null);
     };
-  }, [cameraId, initialTime, onReturnToGrid]);
+  }, [cameraId, onReturnToGrid]);
+
+  // Sync video and frame when initialTime changes (after metadata is loaded)
+  useEffect(() => {
+    if (!videoRef.current) return;
+    
+    const video = videoRef.current;
+    const fps = 30;
+    
+    // Only sync if video metadata is already loaded
+    if (video.readyState >= 1 && initialTime > 0 && initialTime <= video.duration) {
+      const targetFrame = Math.floor(initialTime * fps) + 1;
+      const currentFrameFromTime = Math.floor(video.currentTime * fps) + 1;
+      
+      // Only seek if there's a significant difference (more than 1 frame)
+      if (Math.abs(targetFrame - currentFrameFromTime) > 1) {
+        console.log('Syncing video to initialTime:', initialTime, 'Frame:', targetFrame);
+        video.currentTime = initialTime;
+        setCurrentFrame(targetFrame);
+        
+        // Request tracking data for the new frame
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          trackingWebSocketService.requestFrame(ws, targetFrame);
+        }
+      }
+    }
+  }, [initialTime, ws]);
 
   // Update current frame and request tracking data
   useEffect(() => {

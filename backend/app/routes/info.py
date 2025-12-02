@@ -1,6 +1,8 @@
 """Info routes for API endpoints."""
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request, Response
+from fastapi.responses import FileResponse, StreamingResponse
 from pathlib import Path
+import os
 
 from app.config import get_settings, Settings
 from app.dependencies import get_tracking_service_dep, get_calibration_service_dep
@@ -85,3 +87,136 @@ async def debug_calibration_info(
 ):
     """Debug endpoint to check if calibration data is loaded"""
     return calibration_service.get_info()
+
+
+@router.get("/videos/{filename}")
+async def serve_video(
+    filename: str,
+    request: Request,
+    settings: Settings = Depends(get_settings)
+):
+    """Serve video files with proper CORS headers and range request support"""
+    video_path = settings.video_dir / filename
+    
+    # Security check: prevent directory traversal
+    try:
+        video_path.resolve().relative_to(settings.video_dir.resolve())
+    except ValueError:
+        return Response(status_code=403, content="Forbidden")
+    
+    if not video_path.exists():
+        return Response(status_code=404, content="Video not found")
+    
+    # Check if file is a video
+    if video_path.suffix.lower() not in ['.mp4', '.avi', '.mov', '.mkv', '.webm']:
+        return Response(status_code=400, content="Invalid file type")
+    
+    # Get file size
+    file_size = video_path.stat().st_size
+    
+    # Handle range requests for video streaming
+    range_header = request.headers.get('range')
+    
+    if range_header:
+        # Parse range header
+        range_match = range_header.replace('bytes=', '').split('-')
+        start = int(range_match[0]) if range_match[0] else 0
+        end = int(range_match[1]) if range_match[1] else file_size - 1
+        
+        # Ensure valid range
+        if start >= file_size or end >= file_size:
+            return Response(status_code=416, content="Range Not Satisfiable")
+        
+        # Calculate content length
+        content_length = end - start + 1
+        
+        # Open file and seek to start position
+        def iterfile():
+            with open(video_path, 'rb') as f:
+                f.seek(start)
+                remaining = content_length
+                while remaining:
+                    chunk_size = min(8192, remaining)
+                    chunk = f.read(chunk_size)
+                    if not chunk:
+                        break
+                    remaining -= len(chunk)
+                    yield chunk
+        
+        # Return partial content response
+        headers = {
+            'Content-Range': f'bytes {start}-{end}/{file_size}',
+            'Accept-Ranges': 'bytes',
+            'Content-Length': str(content_length),
+            'Content-Type': 'video/mp4',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+            'Access-Control-Allow-Headers': 'Range',
+            'Access-Control-Expose-Headers': 'Content-Range, Content-Length',
+        }
+        
+        return StreamingResponse(
+            iterfile(),
+            status_code=206,
+            headers=headers,
+            media_type='video/mp4'
+        )
+    else:
+        # Return full file
+        return FileResponse(
+            video_path,
+            media_type='video/mp4',
+            headers={
+                'Accept-Ranges': 'bytes',
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+                'Access-Control-Allow-Headers': 'Range',
+                'Access-Control-Expose-Headers': 'Content-Range, Content-Length',
+            }
+        )
+
+
+@router.head("/videos/{filename}")
+async def head_video(
+    filename: str,
+    settings: Settings = Depends(get_settings)
+):
+    """Handle HEAD requests for video files"""
+    video_path = settings.video_dir / filename
+    
+    # Security check: prevent directory traversal
+    try:
+        video_path.resolve().relative_to(settings.video_dir.resolve())
+    except ValueError:
+        return Response(status_code=403, content="Forbidden")
+    
+    if not video_path.exists():
+        return Response(status_code=404, content="Video not found")
+    
+    file_size = video_path.stat().st_size
+    
+    headers = {
+        'Content-Length': str(file_size),
+        'Content-Type': 'video/mp4',
+        'Accept-Ranges': 'bytes',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+        'Access-Control-Allow-Headers': 'Range',
+        'Access-Control-Expose-Headers': 'Content-Range, Content-Length',
+    }
+    
+    return Response(status_code=200, headers=headers)
+
+
+@router.options("/videos/{filename}")
+async def options_video():
+    """Handle OPTIONS requests for CORS preflight"""
+    return Response(
+        status_code=200,
+        headers={
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+            'Access-Control-Allow-Headers': 'Range',
+            'Access-Control-Max-Age': '3600',
+        }
+    )

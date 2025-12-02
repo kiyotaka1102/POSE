@@ -2,7 +2,6 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
 from app.db import init_database, close_database
@@ -21,11 +20,10 @@ async def lifespan(app: FastAPI):
     # Initialize database
     await init_database()
     
-    # Mount static files for videos
+    # Video files are now served via route handler in info.py with proper CORS headers
     if settings.video_dir.exists():
-        video_static_files = StaticFiles(directory=str(settings.video_dir))
-        app.mount("/api/videos", video_static_files, name="videos")
-        print(f"📁 Static files mounted at /api/videos")
+        print(f"📁 Video directory found: {settings.video_dir}")
+        print(f"📁 Videos will be served at /api/videos/{{filename}}")
     else:
         print(f"⚠️  Video directory not found: {settings.video_dir}")
     
